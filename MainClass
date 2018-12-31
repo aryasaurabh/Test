@@ -1,0 +1,497 @@
+package com.techm.elsm.controller;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.techm.elsm.execption.ELMSException;
+import com.techm.elsm.model.Application;
+import com.techm.elsm.model.EnvBooking;
+import com.techm.elsm.model.Env_EnvBookingMapping;
+import com.techm.elsm.model.Environment;
+import com.techm.elsm.model.Status;
+import com.techm.elsm.model.Users;
+import com.techm.elsm.service.AppService;
+import com.techm.elsm.service.EnvService;
+import com.techm.elsm.service.LoginService;
+import com.techm.elsm.util.JsonBuild;
+
+import net.sf.json.JSONArray;
+import net.sf.json.JSONObject;
+
+@Controller
+
+public class ApplicationController {
+
+	@Autowired
+	private AppService appService;
+
+	@Autowired
+	private EnvService envService;
+
+	@Autowired
+	private LoginService loginService;
+
+	@Autowired
+	private EnviromentController envController;
+
+	@RequestMapping(value = "/getEnvBookingIds", produces = "application/json", method = RequestMethod.POST)
+
+	public @ResponseBody String getEnvBookingIds(HttpServletRequest request, HttpServletResponse response)
+			throws IOException {
+		System.out.println("Enter into getEnvBookingIds() !!!!");
+		String json = JsonBuild.getJSONFromRequest(request);
+		JSONObject jsonObject = JSONObject.fromObject(json);
+		System.out.println("jsonObject ......" + jsonObject);
+		String envId = (String) jsonObject.get("envId");
+		JSONObject aObj = null;
+		JSONArray jsonArr = new JSONArray();
+		jsonArr.add("No Data found");
+		// jsonArr.add("NO Dataound");
+		List<Env_EnvBookingMapping> envDataLst = new ArrayList<Env_EnvBookingMapping>();
+
+		envDataLst = envService.getEnvDtls(envId);
+
+		if (envDataLst != null && envDataLst.size() > 0) {
+			System.out.println(envDataLst);
+
+			JSONArray listArr = new JSONArray();
+
+			for (Env_EnvBookingMapping env : envDataLst) {
+				aObj = new JSONObject();
+				aObj.put("envBookedId", env.getEnvBookingId());
+				listArr.add(aObj);
+				jsonArr.clear();
+			}
+
+			jsonArr = JSONArray.fromObject(listArr);
+			System.out.println(jsonArr);
+		}
+
+		return jsonArr.toString();
+	}
+
+	@RequestMapping(value = "/getEnvBookedDtls", produces = "application/json", method = RequestMethod.POST)
+
+	public @ResponseBody String getEnvBookedDtls(HttpServletRequest request, HttpServletResponse response)
+			throws IOException {
+		System.out.println("Enter into getEnvBookedDtls() !!!!");
+		String json = JsonBuild.getJSONFromRequest(request);
+		JSONObject jsonObject = JSONObject.fromObject(json);
+
+		System.out.println("jsonObject ......" + jsonObject);
+		String envBookedId = (String) jsonObject.get("envBookedId");
+		System.out.println("envBookedId   : " + envBookedId);
+
+		EnvBooking envDataBookedData = new EnvBooking();
+
+		JSONArray jsonArr = new JSONArray();
+		jsonArr.add("No Data found");
+		String details = "";
+
+		if (envBookedId != null && !envBookedId.equalsIgnoreCase("--- Select Envbooked Id ---")
+				&& !envBookedId.equalsIgnoreCase("")) {
+			envDataBookedData = envService.getEnvBookingDtls(envBookedId);
+			details = envDataBookedData.getDescription();
+			System.out.println(details);
+
+			jsonArr.clear();
+			jsonArr.add(details);
+			jsonArr = JSONArray.fromObject(jsonArr);
+		}
+
+		return jsonArr.toString();
+	}
+
+	@RequestMapping(value = "/appCheckNames", method = RequestMethod.POST)
+	public @ResponseBody String checkNames(Model model, HttpServletRequest request, HttpServletResponse response)
+			throws IOException {
+		System.out.println("Enter into checkNames() !!!!");
+
+		boolean isAvalbl = false;
+		String res = "";
+		String json = JsonBuild.getJSONFromRequest(request);
+		System.out.println("json= appCheckNames  checkNames  ::::  " + json);
+		JSONObject jsonObject = JSONObject.fromObject(json);
+
+		String onblurAction = (String) jsonObject.get("onblurAction");
+		System.out.println("onblurAction in  appCheckNames" + onblurAction);
+
+		String name = (String) jsonObject.get("name");
+		System.out.println(" AppName  is  : " + name);
+
+		String appId = (String) jsonObject.get("appId");
+		System.out.println("AppId  is  : " + appId);
+
+		isAvalbl = appService.validateName(name, onblurAction, appId);
+		if (isAvalbl) {
+			System.out.println("Is Name Present ??? : " + isAvalbl);
+			res = "YES";
+		} else {
+			System.out.println("Is Name Present ??? : " + isAvalbl);
+			res = "NO";
+		}
+
+		return res;
+	}
+
+	@RequestMapping(value = "/createApp", method = RequestMethod.GET)
+	public String getApplicationForm(Model model) throws ELMSException {
+		List<Environment> envrnmntList = new ArrayList<Environment>();
+		List<Application> appList = new ArrayList<Application>();
+
+		System.out.println("Diptesh Entered getApplicationForm method!!! ");
+		try {
+			envrnmntList.clear();
+			envrnmntList = envService.getEnvDtlsInactive(true);
+		} catch (Exception e) {
+			throw new ELMSException("Error While creating  application: " + e.getMessage());
+
+		}
+
+		model.addAttribute("envrnmntList", envrnmntList);
+
+		// appList = appService.getAppDtls(false);
+		appList = appService.getAppDtls(true);
+		if (!appList.isEmpty())
+			model.addAttribute("appList", appList);
+		model.addAttribute("application", new Application());
+
+		List<Users> usersList = loginService.getAllUsers();
+		List usersList1 = new ArrayList();
+		;
+		List usersList2 = null;
+		if (usersList != null) {
+			System.out.println(usersList);
+			for (Users userObj : usersList) {
+				usersList1.add(userObj.getUsername());
+			}
+			usersList2 = (List) usersList1.stream().distinct().collect(Collectors.toList());
+			model.addAttribute("usersList", usersList2);
+			System.out.println("final usersList in getApplicationForm " + usersList2);
+		}
+
+		return "add_application";
+
+	}
+
+	@RequestMapping(value = "/createApp", method = RequestMethod.POST)
+	public String saveApplication(Model model, HttpServletRequest request, HttpServletResponse response) {
+		System.out.println("Enter Application in to saveApplication() post");
+		Map<String, Environment> envrnmntMap = new HashMap<String, Environment>();
+		boolean res = false;
+		List<Application> appList = new ArrayList<Application>();
+
+		try {
+			String json = JsonBuild.getJSONFromRequest(request);
+			System.out.println("json= :::::  " + json);
+			JSONObject jsonObject = JSONObject.fromObject(json);
+			Application application = (Application) JSONObject.toBean(jsonObject, Application.class);
+			System.out.println("Environment Id is" + jsonObject.get("envrmnt").toString());
+			application.setStatus(Status.ACTIVE.toString());
+			Environment environment = envService.getEnvDetails(jsonObject.get("envrmnt").toString());
+			application.setEnvrmnt(environment);
+			if (application.getEnvBookingId().equalsIgnoreCase("--- Select Envbooked Id ---")) {
+				application.setEnvBookingId("NO Booking found ");
+			}
+			res = appService.saveAppDtls(application);
+			System.out.println("res is " + res);
+			appList = appService.getAppDtls(true);
+			model.addAttribute("appList", appList);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return "applicationDetails";
+	}
+
+	@RequestMapping(value = "/saveApp", method = RequestMethod.POST)
+	public String saveApp(Model model, HttpServletRequest request, HttpServletResponse response) {
+
+		System.out.println("Enter Application in to saveApp() post");
+		Map<String, Environment> envrnmntMap = new HashMap<String, Environment>();
+		boolean res = false;
+		List<Application> appList = new ArrayList<Application>();
+
+		try {
+			String json = JsonBuild.getJSONFromRequest(request);
+			System.out.println("json= :::::  " + json);
+			JSONObject jsonObject = JSONObject.fromObject(json);
+			Application application = (Application) JSONObject.toBean(jsonObject, Application.class);
+			System.out.println("Environment Id is" + jsonObject.get("envrmnt").toString());
+			application.setStatus(Status.ACTIVE.toString());
+			Environment environment = envService.getEnvDetails(jsonObject.get("envrmnt").toString());
+			application.setEnvrmnt(environment);
+			if (application.getEnvBookingId().equalsIgnoreCase("--- Select Envbooked Id ---")) {
+				application.setEnvBookingId("NO Booking found ");
+			}
+			res = appService.saveApp(application);
+			System.out.println("res is " + res);
+			appList = appService.getAppDtls(true);
+			model.addAttribute("appList", appList);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		/*
+		 * if (res) { return "Application Added Successfully"; } else { return
+		 * "Application Not Add Successfully"; }
+		 */
+
+		// model.addAttribute("application" , new Application());
+		return "applicationDetails";
+
+	}
+
+	@RequestMapping(value = "/createMapApp", method = RequestMethod.POST)
+	public String saveMapApplication(Model model, HttpServletRequest request, HttpServletResponse response) {
+		System.out.println("Enter Application in to saveApplication");
+		boolean res = false;
+		model.addAttribute("application", new Application());
+		List<Application> appList = new ArrayList<Application>();
+
+		try {
+			String json = JsonBuild.getJSONFromRequest(request);
+			System.out.println("json= :::::  " + json);
+			JSONObject jsonObject = JSONObject.fromObject(json);
+			Application application = (Application) JSONObject.toBean(jsonObject, Application.class);
+
+			application.setStatus(Status.INACTIVE.toString());
+
+			res = appService.saveAppDtls(application);
+			System.out.println("res is -> " + res);
+			appList = appService.getAppDtls(false);
+			model.addAttribute("appList", appList);
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return "application";
+	}
+
+	private Map<String, Environment> getEnvBeanByList() {
+		List<Environment> envrnmntList = new ArrayList<Environment>();
+		Map<String, Environment> envrnmntMap = new HashMap<String, Environment>();
+		try {
+
+			envrnmntList = envService.getEnvDtls(true);
+
+			for (Environment envForm : envrnmntList) {
+				envrnmntMap.put(envForm.getEnvId().toString(), envForm);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return envrnmntMap;
+	}
+
+	@SuppressWarnings({ "rawtypes", "unchecked" })
+	@RequestMapping(value = "/applicationList", method = RequestMethod.GET)
+	public @ResponseBody String getAppDtlsByEnvId(Model model, HttpServletRequest request) {
+		// public @ResponseBody String getAppDtlsByEnvId(Model model,
+		// HttpServletRequest request){
+		String envId = request.getParameter("envId");
+
+		String res = "";
+		List appList = (ArrayList) appService.getAppDtlsByEnvId(envId);
+		System.out.println("Size is" + appList.size());
+		if (appList.size() > 0) {
+			for (Iterator iterator = appList.iterator(); iterator.hasNext();) {
+				Application application = (Application) iterator.next();
+				System.out.print("First Name: " + application.getAppName());
+				System.out.print("  Last Name: " + application.getAppType());
+				res = res + application.getAppId().toString() + "&" + application.getAppName().toString() + "/";
+			}
+		} else {
+			res = "No Application Data Available";
+		}
+		/*
+		 * for(Application appForm : appList){ //res = res +
+		 * appForm.getAppId().toString
+		 * ()+"&"+appForm.getAppName().toString()+"/";
+		 * System.out.println("afsds"); }
+		 */
+		System.out.println("res is" + res);
+		// model.addAttribute("appList", appList);
+		// return "Inventory";
+		return res;
+	}
+
+	@RequestMapping(value = "/appList", method = RequestMethod.GET)
+	public String getAppListDetails(Model model) {
+
+		List<Application> appList = null;
+		String jspName = "";
+		System.out.println("Entered the App list method!!!");
+		try {
+			appList = appService.getAppDtls(true);
+			model.addAttribute("appList", appList);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		/*
+		 * if(appList.size() > 0){ jspName = "applicationDetails"; }
+		 */
+
+		return "applicationDetails";
+	}
+
+	public void getEditAppUtil(Model model, HttpServletRequest request) {
+		String appId = request.getParameter("id");
+		// appId = "1";
+		System.out.println("appId is" + appId);
+		Application appBean = appService.getAppDtlsById(appId);
+		// List<Environment> envrnmntList = envService.getEnvDtls(true);
+		// model.addAttribute("envrnmntList", envrnmntList);
+		// model.addAttribute("envId", envId);
+		System.out.println("appName is" + appBean.getAppName());
+		model.addAttribute("application", appBean);
+
+		List<Users> usersList = loginService.getAllUsers();
+		List usersList1 = new ArrayList();
+
+		List usersList2 = null;
+		if (usersList != null) {
+			System.out.println(usersList);
+			for (Users userObj : usersList) {
+				usersList1.add(userObj.getUsername());
+			}
+			usersList2 = (List) usersList1.stream().distinct().collect(Collectors.toList());
+			model.addAttribute("usersList", usersList2);
+			System.out.println("final usersList in editAppPage " + usersList2);
+		}
+
+	}
+
+	@RequestMapping(value = "/editAppPage", method = RequestMethod.GET)
+	public String getEditApp(Model model, HttpServletRequest request) {
+		System.out.println("Inside getEditApp");
+		getEditAppUtil(model, request);
+		List<Environment> envrnmntList = envService.getEnvDtls(true);
+		model.addAttribute("envrnmntList", envrnmntList);
+		return "add_application";
+	}
+
+	@RequestMapping(value = "/editMapAppPage", method = RequestMethod.GET)
+	public @ResponseBody String getEditMapApp(Model model, HttpServletRequest request) throws IOException {
+		JSONObject aObj = null;
+
+		aObj = new JSONObject();
+		try {
+			System.out.println("Inside the edit application function");
+			String appId = request.getParameter("id");
+			// appId = "1";
+			System.out.println("appId is" + appId);
+			Application appBean = appService.getAppDtlsById(appId);
+			model.addAttribute("application", appBean);
+
+			aObj.put("appId", appBean.getAppId());
+			aObj.put("appName", appBean.getAppName());
+			aObj.put("appType", appBean.getAppType());
+			aObj.put("appDesc", appBean.getDescription());
+			aObj.put("apptech", appBean.getTechnology());
+			aObj.put("appOS", appBean.getOs());
+			aObj.put("appPort", appBean.getAppVersion());
+
+			// Code to split RAM value and unit using comma
+			String ram = appBean.getAppRAM();
+			String[] ramSplit = ram.split("\\s+");
+			aObj.put("appRAM", ramSplit[0]);
+			aObj.put("ramSize", ramSplit[1]);
+
+			// Code to split HDD value and unit using comma
+			String hdd = appBean.getAppHDD();
+			String[] hddSplit = hdd.split("\\s+");
+			aObj.put("appHDD", hddSplit[0]);
+			aObj.put("hddSize", hddSplit[1]);
+
+			aObj.put("appFramework", appBean.getAppFramework());
+			aObj.put("appProccessor", appBean.getAppProcessor());
+			aObj.put("appAdminName", appBean.getContactPersonName());
+			aObj.put("appEmail", appBean.getContactEmail());
+			aObj.put("appContactNo", appBean.getContactNo());
+			aObj.put("appURL", appBean.getContactURL());
+
+			System.out.println("Object value => " + aObj);
+		} catch (Exception e) {
+			// TODO: handle exception
+			e.printStackTrace();
+		}
+
+		return aObj.toString();
+	}
+
+	@RequestMapping(value = "/deleteApp")
+	public String deleteAppRecord(Model model, HttpServletRequest request) {
+		System.out.println("Inside deleteAppRecord");
+		String appId = request.getParameter("id");
+		List<Application> appList = null;
+		boolean res = false;
+		// appId = "1";
+		System.out.println("appId is" + appId);
+		/*
+		 * Application application = appService.getAppDtlsById(appId);
+		 * application.setStatus(Status.INACTIVE);
+		 */
+		res = appService.deleteAppDtls(appId);
+		System.out.println("After getting results " + res);
+		appList = appService.getAppDtls(true);
+		model.addAttribute("appList", appList);
+		return "applicationDetails";
+	}
+
+	@RequestMapping(value = "/deleteMapApp", method = RequestMethod.GET)
+	public String deleteMapAppRecord(Model model, HttpServletRequest request,
+			@RequestParam(value = "app_ids[]") String[] app_ids) {
+		System.out.println("Function to delete multiple applications called...");
+		// String appId = request.getParameter("id");
+		model.addAttribute("application", new Application());
+		List<Application> appList = null;
+		boolean res = false;
+		boolean flag = false;
+		for (int i = 0; i < app_ids.length; i++) {
+			System.out.println("App ID to delete : " + app_ids[i]);
+		}
+		// System.out.println("appId is" + appId);
+		res = appService.deleteAppDtls(app_ids);
+		System.out.println("After getting results " + res);
+		appList = appService.getAppDtls(flag);
+		model.addAttribute("appList", appList);
+		return "application";
+	}
+
+	// Code to get the addApplication.jsp Page
+	@RequestMapping(value = "/getappList", method = RequestMethod.GET)
+	public String getAddApplication(Model model) {
+		System.out.println("Entered the method to get the new addApplication JSP");
+
+		model.addAttribute("application", new Application());
+		List<Application> appList = null;
+
+		try {
+			appList = appService.getAppDtls(false);
+			model.addAttribute("appList", appList);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		return "application";
+	}
+
+}
